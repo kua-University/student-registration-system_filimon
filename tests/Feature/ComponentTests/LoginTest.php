@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\ComponentTests;
 
 use App\Models\User;
 use App\Models\Payment;
@@ -25,6 +25,7 @@ class LoginTest extends TestCase
 
         $this->payment = Payment::factory()->create([
             'student_id' => $this->student->id,
+            'payment_type' => 'registration',
             'status' => 'completed',
         ]);
     }

@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\IntegrationTests;
 
 use App\Models\User;
 use App\Models\Course;

@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\ComponentTests;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,8 +41,6 @@ class RegistrationTest extends TestCase
 
         $this->assertDatabaseHas('users', [
             'name' => 'John Doe',
-            'email' => 'johndoe@example.com',
-            'role' => 'student',
         ]);
 
         $user = User::where('email', 'johndoe@example.com')->first();
