@@ -5,146 +5,107 @@ namespace Tests\Feature\IntegrationTests;
 use App\Models\User;
 use App\Models\Course;
 use App\Models\CourseFee;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
 
-class CourseManagementTest extends TestCase
-{
-    use RefreshDatabase;
+uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
-    protected $admin;
-    protected $courses;
+it('shows all courses for authenticated admin', function () {
+    $admin = User::factory()->admin()->create();
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+    $response = $this->actingAs($admin)->get(route('admin.courses'));
 
-        $this->admin = User::factory()->admin()->create();
+    $response->assertStatus(200);
+    $response->assertSee('Courses');
+});
 
-        $this->courses = Course::factory()
-            ->count(3)
-            ->has(CourseFee::factory()->state(['amount' => 200]), 'courseFee')
-            ->create();
-    }
+it('shows course creation form for authenticated admin', function () {
+    $admin = User::factory()->admin()->create();
 
-    /**
-     * Test the course listing page shows all courses for authenticated admins.
-     */
-    public function test_course_listing_page_shows_all_courses_for_authenticated_admin()
-    {
-        $response = $this->actingAs($this->admin)->get(route('admin.courses'));
+    $response = $this->actingAs($admin)->get(route('admin.create-course'));
 
-        $response->assertStatus(200);
-        $response->assertSee('Courses');
-    }
+    $response->assertStatus(200);
+    $response->assertSee('Create Course');
+});
 
-    /**
-     * Test the course creation form is accessible by authenticated admin users.
-     */
-    public function test_course_creation_form_is_accessible_by_admin()
-    {
-        $response = $this->actingAs($this->admin)->get(route('admin.create-course'));
+it('creates a course successfully', function () {
+    $admin = User::factory()->admin()->create();
 
-        $response->assertStatus(200);
-        $response->assertSee('Create Course');
-    }
+    $courseData = [
+        'name' => 'Organic Chemistry',
+        'code' => 'CH201',
+        'category' => 'Chemistry',
+        'credits' => 3,
+        'description' => 'Study of carbon-containing compounds.',
+    ];
 
-    /**
-     * Test successful creation of a course.
-     */
-    public function test_successful_course_creation()
-    {
-        $courseData = [
-            'name' => 'Organic Chemistry',
-            'code' => 'CH201',
-            'category' => 'Chemistry',
-            'credits' => 3,
-            'description' => 'Study of carbon-containing compounds.',
-        ];
+    $feeData = [
+        'fee' => 200,
+    ];
 
-        $feeData = [
-            'fee' => 200,
-        ];
+    $requestData = array_merge($courseData, $feeData);
 
-        $requestData = array_merge($courseData, $feeData);
+    $response = $this->actingAs($admin)->post(route('admin.store-course'), $requestData);
 
-        $response = $this->actingAs($this->admin)->post(route('admin.store-course'), $requestData);
+    $response->assertRedirect(route('admin.courses'));
+    $this->assertDatabaseHas('courses', $courseData);
 
-        $response->assertRedirect(route('admin.courses'));
+    $course = Course::where('code', 'CH201')->first();
+    $this->assertDatabaseHas('course_fees', [
+        'course_id' => $course->id,
+        'amount' => 200,
+    ]);
+});
 
-        $this->assertDatabaseHas('courses', $courseData);
+it('displays correct details in edit course form', function () {
+    $admin = User::factory()->admin()->create();
+    $course = Course::factory()->create();
 
-        $course = Course::where('code', 'CH201')->first();
-        $this->assertDatabaseHas('course_fees', [
-            'course_id' => $course->id,
-            'amount' => 200,
-        ]);
-    }
+    $response = $this->actingAs($admin)->get(route('admin.edit-course', $course->id));
 
-    /**
-     * Test editing a course form displays correct details.
-     */
-    public function test_edit_course_form_displays_correct_details()
-    {
-        $course = $this->courses->first();
+    $response->assertStatus(200);
+    $response->assertSee($course->name);
+    $response->assertSee($course->description);
+});
 
-        $response = $this->actingAs($this->admin)->get(route('admin.edit-course', $course->id));
+it('updates a course successfully', function () {
+    $admin = User::factory()->admin()->create();
+    $course = Course::factory()->create();
 
-        $response->assertStatus(200);
-        $response->assertSee($course->name);
-        $response->assertSee($course->description);
-    }
+    $updateData = [
+        'name' => 'Updated Course Name',
+        'description' => 'Updated description.',
+        'code' => 'CS101',
+        'category' => 'Computer Science',
+        'credits' => 4,
+    ];
 
-    /**
-     * Test successful course update.
-     */
-    public function test_successful_course_update()
-    {
-        $course = $this->courses->first();
+    $feeData = [
+        'fee' => 200,
+    ];
 
-        $updateData = [
-            'name' => 'Updated Course Name',
-            'description' => 'Updated description.',
-            'code' => 'CS101',
-            'category' => 'Computer Science',
-            'credits' => 4,
-        ];
+    $requestData = array_merge($updateData, $feeData);
 
-        $feeData = [
-            'fee' => 200,
-        ];
+    $response = $this->actingAs($admin)->post(route('admin.update-course', $course->id), $requestData);
 
-        $requestData = array_merge($updateData, $feeData);
+    $response->assertRedirect(route('admin.courses'));
+    $this->assertDatabaseHas('courses', $updateData);
+});
 
-        $response = $this->actingAs($this->admin)->post(route('admin.update-course', $course->id), $requestData);
+it('shows course deletion confirmation page', function () {
+    $admin = User::factory()->admin()->create();
+    $course = Course::factory()->create();
 
-        $response->assertRedirect(route('admin.courses'));
-        $this->assertDatabaseHas('courses', $updateData);
-    }
+    $response = $this->actingAs($admin)->get(route('admin.destroy-course', $course->id));
 
-    /**
-     * Test the course deletion confirmation page.
-     */
-    public function test_course_deletion_confirmation_page()
-    {
-        $course = $this->courses->first();
+    $response->assertStatus(200);
+    $response->assertSee('Are you sure');
+});
 
-        $response = $this->actingAs($this->admin)->get(route('admin.destroy-course', $course->id));
+it('deletes a course successfully', function () {
+    $admin = User::factory()->admin()->create();
+    $course = Course::factory()->create();
 
-        $response->assertStatus(200);
-        $response->assertSee('Are you sure');
-    }
+    $response = $this->actingAs($admin)->post(route('admin.delete-course', $course->id));
 
-    /**
-     * Test successful course deletion.
-     */
-    public function test_successful_course_deletion()
-    {
-        $course = $this->courses->first();
-
-        $response = $this->actingAs($this->admin)->post(route('admin.delete-course', $course->id));
-
-        $response->assertRedirect(route('admin.courses'));
-        $this->assertDatabaseMissing('courses', ['id' => $course->id]);
-    }
-}
+    $response->assertRedirect(route('admin.courses'));
+    $this->assertDatabaseMissing('courses', ['id' => $course->id]);
+});

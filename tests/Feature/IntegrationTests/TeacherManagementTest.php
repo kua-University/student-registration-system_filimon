@@ -5,149 +5,134 @@ namespace Tests\Feature\IntegrationTests;
 use App\Models\User;
 use App\Models\Course;
 use App\Models\TeacherCourseAssignment;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class TeacherManagementTest extends TestCase
-{
-    use RefreshDatabase;
+uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
-    protected $admin;
-    protected $teacher;
-    protected $course;
+it('shows the teacher listing page for authenticated admins', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    $teacher = User::factory()->create(['role' => 'teacher']);
+    
+    TeacherCourseAssignment::create([
+        'teacher_id' => $teacher->id,
+        'course_id' => Course::factory()->create()->id,
+    ]);
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+    $response = $this->actingAs($admin)->get(route('admin.teachers'));
 
-        $this->admin = User::factory()->create([
-            'role' => 'admin',
-            'password' => bcrypt('admin123'),
-        ]);
+    $response->assertStatus(200);
+    $response->assertSee('Teachers');
+    $response->assertSee($teacher->name);
+});
 
-        $this->teacher = User::factory()->create([
-            'role' => 'teacher',
-            'password' => bcrypt('teacher123'),
-        ]);
+it('allows admins to access the teacher creation form', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
 
-        $this->course = Course::factory()->create();
+    $response = $this->actingAs($admin)->get(route('admin.create-teacher'));
 
-        TeacherCourseAssignment::create([
-            'teacher_id' => $this->teacher->id,
-            'course_id' => $this->course->id,
-        ]);
-    }
+    $response->assertStatus(200);
+    $response->assertSee('Register New Teacher');
+});
 
-    /**
-     * Test the teacher listing page shows all teachers for authenticated admins.
-     */
-    public function test_teacher_listing_page_shows_all_teachers_for_authenticated_admin()
-    {
-        $response = $this->actingAs($this->admin)->get(route('admin.teachers'));
+it('allows admins to successfully create a teacher', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    $course = Course::factory()->create();
 
-        $response->assertStatus(200);
-        $response->assertSee('Teachers');
-        $response->assertSee($this->teacher->name);
-    }
+    $teacherData = [
+        'name' => 'John Doe',
+        'email' => 'johndoe@example.com',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+        'course_id' => $course->id,
+    ];
 
-    /**
-     * Test the teacher creation form is accessible by authenticated admin users.
-     */
-    public function test_teacher_creation_form_is_accessible_by_admin()
-    {
-        $response = $this->actingAs($this->admin)->get(route('admin.create-teacher'));
+    $response = $this->actingAs($admin)->post(route('admin.store-teacher'), $teacherData);
 
-        $response->assertStatus(200);
-        $response->assertSee('Register New Teacher');
-    }
+    $response->assertRedirect(route('admin.teachers'));
+    $this->assertDatabaseHas('users', [
+        'name' => 'John Doe',
+        'email' => 'johndoe@example.com',
+        'role' => 'teacher',
+    ]);
 
-    /**
-     * Test successful creation of a teacher.
-     */
-    public function test_successful_teacher_creation()
-    {
-        $teacherData = [
-            'name' => 'John Doe',
-            'email' => 'johndoe@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
-            'course_id' => $this->course->id,
-        ];
+    $teacher = User::where('email', 'johndoe@example.com')->first();
+    $this->assertDatabaseHas('teacher_course_assignments', [
+        'teacher_id' => $teacher->id,
+        'course_id' => $course->id,
+    ]);
+});
 
-        $response = $this->actingAs($this->admin)->post(route('admin.store-teacher'), $teacherData);
+it('displays correct details on the teacher edit form', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    $teacher = User::factory()->create(['role' => 'teacher']);
+    $course = Course::factory()->create();
 
-        $response->assertRedirect(route('admin.teachers'));
-        $this->assertDatabaseHas('users', [
-            'name' => 'John Doe',
-            'email' => 'johndoe@example.com',
-            'role' => 'teacher',
-        ]);
+    TeacherCourseAssignment::create([
+        'teacher_id' => $teacher->id,
+        'course_id' => $course->id,
+    ]);
 
-        $teacher = User::where('email', 'johndoe@example.com')->first();
-        $this->assertDatabaseHas('teacher_course_assignments', [
-            'teacher_id' => $teacher->id,
-            'course_id' => $this->course->id,
-        ]);
-    }
+    $response = $this->actingAs($admin)->get(route('admin.edit-teacher', $teacher->id));
 
-    /**
-     * Test editing a teacher form displays correct details.
-     */
-    public function test_edit_teacher_form_displays_correct_details()
-    {
-        $response = $this->actingAs($this->admin)->get(route('admin.edit-teacher', $this->teacher->id));
+    $response->assertStatus(200);
+    $response->assertSee($teacher->name);
+    $response->assertSee($teacher->email);
+});
 
-        $response->assertStatus(200);
-        $response->assertSee($this->teacher->name);
-        $response->assertSee($this->teacher->email);
-    }
+it('allows admins to successfully update a teacher', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    $teacher = User::factory()->create(['role' => 'teacher']);
+    $course = Course::factory()->create();
 
-    /**
-     * Test successful teacher update.
-     */
-    public function test_successful_teacher_update()
-    {
-        $updateData = [
-            'name' => 'Updated Teacher Name',
-            'email' => 'updatedteacher@example.com',
-            'course_id' => $this->course->id,
-        ];
+    TeacherCourseAssignment::create([
+        'teacher_id' => $teacher->id,
+        'course_id' => $course->id,
+    ]);
 
-        $response = $this->actingAs($this->admin)->put(route('admin.update-teacher', $this->teacher->id), $updateData);
+    $updateData = [
+        'name' => 'Updated Teacher Name',
+        'email' => 'updatedteacher@example.com',
+        'course_id' => $course->id,
+    ];
 
-        $response->assertRedirect(route('admin.teachers'));
-        $this->assertDatabaseHas('users', [
-            'id' => $this->teacher->id,
-            'name' => 'Updated Teacher Name',
-            'email' => 'updatedteacher@example.com',
-        ]);
+    $response = $this->actingAs($admin)->put(route('admin.update-teacher', $teacher->id), $updateData);
 
-        $this->assertDatabaseHas('teacher_course_assignments', [
-            'teacher_id' => $this->teacher->id,
-            'course_id' => $this->course->id,
-        ]);
-    }
+    $response->assertRedirect(route('admin.teachers'));
+    $this->assertDatabaseHas('users', [
+        'id' => $teacher->id,
+        'name' => 'Updated Teacher Name',
+        'email' => 'updatedteacher@example.com',
+    ]);
 
-    /**
-     * Test the teacher deletion confirmation page.
-     */
-    public function test_teacher_deletion_confirmation_page()
-    {
-        $response = $this->actingAs($this->admin)->get(route('admin.destroy-teacher', $this->teacher->id));
+    $this->assertDatabaseHas('teacher_course_assignments', [
+        'teacher_id' => $teacher->id,
+        'course_id' => $course->id,
+    ]);
+});
 
-        $response->assertStatus(200);
-        $response->assertSee('Are you sure you want to delete this teacher?');
-    }
+it('displays a confirmation page for teacher deletion', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    $teacher = User::factory()->create(['role' => 'teacher']);
 
-    /**
-     * Test successful teacher deletion.
-     */
-    public function test_successful_teacher_deletion()
-    {
-        $response = $this->actingAs($this->admin)->post(route('admin.delete-teacher', $this->teacher->id));
+    $response = $this->actingAs($admin)->get(route('admin.destroy-teacher', $teacher->id));
 
-        $response->assertRedirect(route('admin.teachers'));
-        $this->assertDatabaseMissing('users', ['id' => $this->teacher->id]);
-        $this->assertDatabaseMissing('teacher_course_assignments', ['teacher_id' => $this->teacher->id]);
-    }
-}
+    $response->assertStatus(200);
+    $response->assertSee('Are you sure you want to delete this teacher?');
+});
+
+it('allows admins to successfully delete a teacher', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    $teacher = User::factory()->create(['role' => 'teacher']);
+    $course = Course::factory()->create();
+
+    TeacherCourseAssignment::create([
+        'teacher_id' => $teacher->id,
+        'course_id' => $course->id,
+    ]);
+
+    $response = $this->actingAs($admin)->post(route('admin.delete-teacher', $teacher->id));
+
+    $response->assertRedirect(route('admin.teachers'));
+    $this->assertDatabaseMissing('users', ['id' => $teacher->id]);
+    $this->assertDatabaseMissing('teacher_course_assignments', ['teacher_id' => $teacher->id]);
+});

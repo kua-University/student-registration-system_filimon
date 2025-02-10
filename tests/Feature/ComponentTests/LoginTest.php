@@ -4,87 +4,68 @@ namespace Tests\Feature\ComponentTests;
 
 use App\Models\User;
 use App\Models\Payment;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
-class LoginTest extends TestCase
-{
-    use RefreshDatabase;
+uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
-    protected $student;
-    protected $payment;
+it('logs in with valid credentials', function () {
+    $student = User::factory()->create([
+        'role' => 'student',
+        'password' => bcrypt('student123'),
+    ]);
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+    $payment = Payment::factory()->create([
+        'student_id' => $student->id,
+        'payment_type' => 'registration',
+        'status' => 'completed',
+    ]);
 
-        $this->student = User::factory()->create([
-            'role' => 'student',
-            'password' => bcrypt('student123'),
-        ]);
+    $response = $this->post('/login', [
+        'email' => $student->email,
+        'password' => 'student123',
+    ]);
 
-        $this->payment = Payment::factory()->create([
-            'student_id' => $this->student->id,
-            'payment_type' => 'registration',
-            'status' => 'completed',
-        ]);
-    }
+    $response->assertRedirect('/student/dashboard');
+    $this->assertAuthenticatedAs($student);
+});
 
-    /**
-     * Test login with valid credentials
-     */
-    public function test_login_using_valid_credentials()
-    {
-        $response = $this->post('/login', [
-            'email' => $this->student->email,
-            'password' => 'student123',
-        ]);
+it('redirects to payment page if payment status is not completed', function () {
+    $student = User::factory()->create([
+        'role' => 'student',
+        'password' => bcrypt('student123'),
+    ]);
 
-        $response->assertRedirect('/student/dashboard');
-        $this->assertAuthenticatedAs($this->student);
-    }
+    $payment = Payment::factory()->create([
+        'student_id' => $student->id,
+        'payment_type' => 'registration',
+        'status' => 'pending',
+    ]);
 
-    /**
-     * Test login redirects to payment page if payment status is not completed.
-     */
-    public function test_login_with_valid_credentials_redirects_to_payment_page_if_payment_status_is_not_completed()
-    {
-        $this->payment->update(['status' => 'pending']);
+    $response = $this->post('/login', [
+        'email' => $student->email,
+        'password' => 'student123',
+    ]);
 
-        $response = $this->post('/login', [
-            'email' => $this->student->email,
-            'password' => 'student123',
-        ]);
+    $response->assertRedirect(route('show.registration.payment'));
+    $this->assertAuthenticatedAs($student);
+});
 
-        $response->assertRedirect(route('show.registration.payment'));
+it('fails login with invalid credentials', function () {
+    $response = $this->post('/login', [
+        'email' => 'wronguser@example.com',
+        'password' => 'wrongpass',
+    ]);
 
-        $this->assertAuthenticatedAs($this->student);
-    }
+    $response->assertSessionHasErrors(['email']);
+    $this->assertGuest();
+});
 
-    /**
-     * Test login with invalid credentials.
-     */
-    public function test_login_with_invalid_credentials()
-    {
-        $response = $this->post('/login', [
-            'email' => 'wronguser@example.com',
-            'password' => 'wrongpass',
-        ]);
+it('fails login with empty fields', function () {
+    $response = $this->post('/login', [
+        'email' => '',
+        'password' => '',
+    ]);
 
-        $response->assertSessionHasErrors(['email']);
-        $this->assertGuest();
-    }
-
-    /**
-     * Test login with empty fields.
-     */
-    public function test_login_with_empty_fields()
-    {
-        $response = $this->post('/login', [
-            'email' => '',
-            'password' => '',
-        ]);
-
-        $response->assertSessionHasErrors(['email', 'password']);
-    }
-}
+    $response->assertSessionHasErrors(['email', 'password']);
+});

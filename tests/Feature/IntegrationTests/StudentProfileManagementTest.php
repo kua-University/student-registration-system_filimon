@@ -3,92 +3,69 @@
 namespace Tests\Feature\IntegrationTests;
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
 
-class StudentProfileManagementTest extends TestCase
-{
-    use RefreshDatabase;
+uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
-    /**
-     * Test that a student can view their edit profile page.
-     */
-    public function test_student_can_view_edit_profile_page()
-    {
-        $student = User::factory()->create(['role' => 'student']);
+it('allows a student to view their edit profile page', function () {
+    $student = User::factory()->create(['role' => 'student']);
 
-        $this->actingAs($student)
-            ->get(route('student.edit-profile'))
-            ->assertStatus(200)
-            ->assertSee('Edit Profile');
-    }
+    $response = $this->actingAs($student)
+        ->get(route('student.edit-profile'));
 
-    /**
-     * Test that a student can update their profile with valid data.
-     */
-    public function test_student_can_update_profile_with_valid_data()
-    {
-        $student = User::factory()->create(['role' => 'student']);
+    $response->assertStatus(200);
+    $response->assertSee('Edit Profile');
+});
 
-        $newData = [
-            'name' => 'Updated Name',
-            'email' => 'updatedemail@example.com',
-        ];
+it('allows a student to update their profile with valid data', function () {
+    $student = User::factory()->create(['role' => 'student']);
 
-        $this->actingAs($student)
-            ->put(route('student.update-profile'), $newData)
-            ->assertRedirect(route('student.dashboard'));
+    $newData = [
+        'name' => 'Updated Name',
+        'email' => 'updatedemail@example.com',
+    ];
 
-        $this->assertDatabaseHas('users', [
-            'id' => $student->id,
-            'name' => 'Updated Name',
-            'email' => 'updatedemail@example.com',
-        ]);
-    }
+    $response = $this->actingAs($student)
+        ->put(route('student.update-profile'), $newData);
 
-    /**
-     * Test that a student profile update fails with invalid email.
-     */
-    public function test_student_profile_update_fails_with_invalid_email()
-    {
-        $student = User::factory()->create(['role' => 'student']);
+    $response->assertRedirect(route('student.dashboard'));
 
-        $invalidData = [
-            'name' => 'Another Name',
-            'email' => 'invalid-email',
-        ];
+    $this->assertDatabaseHas('users', [
+        'id' => $student->id,
+        'name' => 'Updated Name',
+        'email' => 'updatedemail@example.com',
+    ]);
+});
 
-        $response = $this->actingAs($student)
-            ->put(route('student.update-profile'), $invalidData);
+it('fails profile update with an invalid email', function () {
+    $student = User::factory()->create(['role' => 'student']);
 
-        $response->assertSessionHasErrors(['email']);
-        $this->assertDatabaseMissing('users', ['email' => 'invalid-email']);
-    }
+    $invalidData = [
+        'name' => 'Another Name',
+        'email' => 'invalid-email',
+    ];
 
-    /**
-     * Test that a student profile update fails with missing required fields.
-     */
-    public function test_student_profile_update_fails_with_missing_required_fields()
-    {
-        $student = User::factory()->create(['role' => 'student']);
+    $response = $this->actingAs($student)
+        ->put(route('student.update-profile'), $invalidData);
 
-        $emptyData = [
-            'name' => '',
-            'email' => '',
-        ];
+    $response->assertSessionHasErrors(['email']);
+    $this->assertDatabaseMissing('users', ['email' => 'invalid-email']);
+});
 
-        $response = $this->actingAs($student)
-            ->put(route('student.update-profile'), $emptyData);
+it('fails profile update with missing required fields', function () {
+    $student = User::factory()->create(['role' => 'student']);
 
-        $response->assertSessionHasErrors(['name', 'email']);
-    }
+    $emptyData = [
+        'name' => '',
+        'email' => '',
+    ];
 
-    /**
-     * Test that a non-authenticated user cannot access the edit profile page.
-     */
-    public function test_non_authenticated_user_cannot_access_edit_profile_page()
-    {
-        $this->get(route('student.edit-profile'))
-            ->assertRedirect(route('login'));
-    }
-}
+    $response = $this->actingAs($student)
+        ->put(route('student.update-profile'), $emptyData);
+
+    $response->assertSessionHasErrors(['name', 'email']);
+});
+
+it('prevents non-authenticated users from accessing the edit profile page', function () {
+    $this->get(route('student.edit-profile'))
+        ->assertRedirect(route('login'));
+});

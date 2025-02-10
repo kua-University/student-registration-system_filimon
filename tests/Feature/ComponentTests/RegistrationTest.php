@@ -2,102 +2,74 @@
 
 namespace Tests\Feature\ComponentTests;
 
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Tests\TestCase;
+use App\Models\{User, RegistrationFee};
 
-class RegistrationTest extends TestCase
-{
-    use RefreshDatabase;
+uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
-    /**
-     * Test the registration form is accessible.
-     */
-    public function test_registration_form_is_accessible()
-    {
-        $response = $this->get(route('register'));
+it('displays the registration form', function () {
+    $response = $this->get(route('register'));
 
-        $response->assertStatus(200);
-        $response->assertSee('Register');
-    }
+    $response->assertStatus(200);
+    $response->assertSee('Register');
+});
 
-    /**
-     * Test successful registration of a student.
-     */
-    public function test_successful_student_registration()
-    {
-        $studentData = [
-            'full_name' => 'John Doe',
-            'email' => 'johndoe@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
-        ];
+it('registers a student successfully', function () {
+    RegistrationFee::factory()->create(['amount' => 50]);
+    
+    $studentData = [
+        'full_name' => 'John Doe',
+        'email' => 'johndoe@example.com',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+    ];
 
-        $response = $this->post(route('register'), $studentData);
+    $this->post(route('register'), $studentData)
+         ->assertRedirect(route('show.registration.payment'));
+ 
+    $this->assertDatabaseHas('users', ['name' => 'John Doe']);
 
-        $response->assertRedirect(route('show.registration.payment'));
+    $user = User::where('email', 'johndoe@example.com')->first();
+    $this->assertAuthenticatedAs($user);
+});
 
-        $this->assertDatabaseHas('users', [
-            'name' => 'John Doe',
-        ]);
+it('fails registration with invalid email', function () {
+    $studentData = [
+        'full_name' => 'John Doe',
+        'email' => 'invalid-email',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+    ];
 
-        $user = User::where('email', 'johndoe@example.com')->first();
-        $this->assertAuthenticatedAs($user);
-    }
+    $response = $this->post(route('register'), $studentData);
 
-    /**
-     * Test registration fails with invalid email.
-     */
-    public function test_registration_fails_with_invalid_email()
-    {
-        $studentData = [
-            'full_name' => 'John Doe',
-            'email' => 'invalid-email',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
-        ];
+    $response->assertSessionHasErrors(['email']);
+    $this->assertGuest();
+});
 
-        $response = $this->post(route('register'), $studentData);
+it('fails registration with mismatched passwords', function () {
+    $studentData = [
+        'full_name' => 'John Doe',
+        'email' => 'johndoe@example.com',
+        'password' => 'password123',
+        'password_confirmation' => 'differentpassword',
+    ];
 
-        $response->assertSessionHasErrors(['email']);
-        $this->assertGuest();
-    }
+    $response = $this->post(route('register'), $studentData);
 
-    /**
-     * Test registration fails with mismatched passwords.
-     */
-    public function test_registration_fails_with_mismatched_passwords()
-    {
-        $studentData = [
-            'full_name' => 'John Doe',
-            'email' => 'johndoe@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'differentpassword',
-        ];
+    $response->assertSessionHasErrors(['password']);
+    $this->assertGuest();
+});
 
-        $response = $this->post(route('register'), $studentData);
+it('fails registration with missing fields', function () {
+    $studentData = [
+        'full_name' => '',
+        'email' => '',
+        'password' => '',
+        'password_confirmation' => '',
+    ];
 
-        $response->assertSessionHasErrors(['password']);
-        $this->assertGuest();
-    }
+    $response = $this->post(route('register'), $studentData);
 
-    /**
-     * Test registration fails with missing fields.
-     */
-    public function test_registration_fails_with_missing_fields()
-    {
-        $studentData = [
-            'full_name' => '',
-            'email' => '',
-            'password' => '',
-            'password_confirmation' => '',
-        ];
-
-        $response = $this->post(route('register'), $studentData);
-
-        $response->assertSessionHasErrors(['full_name', 'email', 'password']);
-        $this->assertGuest();
-    }
-}
+    $response->assertSessionHasErrors(['full_name', 'email', 'password']);
+    $this->assertGuest();
+});
